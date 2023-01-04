@@ -1,112 +1,217 @@
-import React, {useState} from 'react';
-import { Platform, KeyboardAvoidingView, StyleSheet, Text, View, TextInput, TouchableOpacity, Keyboard, ScrollView } from 'react-native';
-import Task from './component/Task';
+import React from 'react';
+import {
+  StyleSheet,
+  SafeAreaView,
+  View,
+  TextInput,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+const COLORS = {primary: '#1f145c', white: '#ff00ff'};
 
-export default function App() {
-  const [task, setTask] = useState();
-  const [taskItems, setTaskItems] = useState([]);
+const App = () => {
+  const [todos, setTodos] = React.useState([]);
+  const [textInput, setTextInput] = React.useState('');
 
-  const handleAddTask = () => {
-    Keyboard.dismiss();
-    setTaskItems([...taskItems, task])
-    setTask(null);
-  }
+  React.useEffect(() => {
+    getTodosFromUserDevice();
+  }, []);
 
-  const completeTask = (index) => {
-    let itemsCopy = [...taskItems];
-    itemsCopy.splice(index, 1);
-    setTaskItems(itemsCopy)
-  }
+  React.useEffect(() => {
+    saveTodoToUserDevice(todos);
+  }, [todos]);
 
-  return (
-    <View style={styles.container}>
-      {/* Added this scroll view to enable scrolling when list gets longer than the page */}
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1
-        }}
-        keyboardShouldPersistTaps='handled'
-      >
+  const addTodo = () => {
+    if (textInput == '') {
+      Alert.alert('Error', 'Please input todo');
+    } else {
+      const newTodo = {
+        id: Math.random(),
+        task: textInput,
+        completed: false,
+      };
+      setTodos([...todos, newTodo]);
+      setTextInput('');
+    }
+  };
 
-      {/* Today's Tasks */}
-      <View style={styles.tasksWrapper}>
-        <Text style={styles.sectionTitle}>Today's tasks</Text>
-        <View style={styles.items}>
-          {/* This is where the tasks will go! */}
-          {
-            taskItems.map((item, index) => {
-              return (
-                <TouchableOpacity key={index}  onPress={() => completeTask(index)}>
-                  <Task text={item} /> 
-                </TouchableOpacity>
-              )
-            })
-          }
+  const saveTodoToUserDevice = async todos => {
+    try {
+      const stringifyTodos = JSON.stringify(todos);
+      await AsyncStorage.setItem('todos', stringifyTodos);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const getTodosFromUserDevice = async () => {
+    try {
+      const todos = await AsyncStorage.getItem('todos');
+      if (todos != null) {
+        setTodos(JSON.parse(todos));
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const markTodoComplete = todoId => {
+    const newTodosItem = todos.map(item => {
+      if (item.id == todoId) {
+        return {...item, completed: true};
+      }
+      return item;
+    });
+
+    setTodos(newTodosItem);
+  };
+
+  const deleteTodo = todoId => {
+    const newTodosItem = todos.filter(item => item.id != todoId);
+    setTodos(newTodosItem);
+  };
+
+  const clearAllTodos = () => {
+    Alert.alert('Confirm', 'Clear todos?', [
+      {
+        text: 'Yes',
+        onPress: () => setTodos([]),
+      },
+      {
+        text: 'No',
+      },
+    ]);
+  };
+
+  const ListItem = ({todo}) => {
+    return (
+      <View style={styles.listItem}>
+        <View style={{flex: 1}}>
+          <Text
+            style={{
+              fontWeight: 'bold',
+              fontSize: 15,
+              color: COLORS.secondary,
+              textDecorationLine: todo?.completed ? 'line-through' : 'none',
+            }}>
+            {todo?.task}
+          </Text>
         </View>
-      </View>
-        
-      </ScrollView>
-
-      {/* Write a task */}
-      {/* Uses a keyboard avoiding view which ensures the keyboard does not cover the items on screen */}
-      <KeyboardAvoidingView 
-        behavior={Platform.ios === "ios" ? "padding" : "height"}
-        style={styles.writeTaskWrapper}
-      >
-        <TextInput style={styles.input} placeholder={'Write a task'} value={task} onChangeText={text => setTask(text)} />
-        <TouchableOpacity onPress={() => handleAddTask()}>
-          <View style={styles.addWrapper}>
-            <Text style={styles.addText}>add</Text>
+        {!todo?.completed && (
+          <TouchableOpacity onPress={() => markTodoComplete(todo.id)}>
+            <View style={[styles.actionIcon, {backgroundColor: 'green'}]}>
+              <Icon name="done" size={20} color="white" />
+            </View>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity onPress={() => deleteTodo(todo.id)}>
+          <View style={styles.actionIcon}>
+            <Icon name="delete" size={20} color="white" />
           </View>
         </TouchableOpacity>
-      </KeyboardAvoidingView>
-      
-    </View>
+      </View>
+    );
+  };
+  return (
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: 'white',
+      }}>
+      <View style={styles.header}>
+        <Text
+          style={{
+            fontWeight: 'bold',
+            fontSize: 20,
+            color: COLORS.primary,
+          }}>
+          TODO APP
+        </Text>
+        <Icon name="delete" size={25} color="red" onPress={clearAllTodos} />
+      </View>
+      <FlatList
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{padding: 20, paddingBottom: 100}}
+        data={todos}
+        renderItem={({item}) => <ListItem todo={item} />}
+      />
+
+      <View style={styles.footer}>
+        <View style={styles.inputContainer}>
+          <TextInput
+            value={textInput}
+            placeholder="my todo"
+            onChangeText={text => setTextInput(text)}
+          />
+        </View>
+        <TouchableOpacity onPress={addTodo}>
+          <View style={styles.iconContainer}>
+            <Icon name="add" color="white" size={30} />
+          </View>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#E8EAED',
-  },
-  tasksWrapper: {
-    paddingTop: 80,
-    paddingHorizontal: 20,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: 'bold'
-  },
-  items: {
-    marginTop: 30,
-  },
-  writeTaskWrapper: {
+  footer: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 0,
     width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center'
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: COLORS.white,
   },
-  input: {
-    paddingVertical: 15,
-    paddingHorizontal: 15,
-    backgroundColor: '#FFF',
-    borderRadius: 60,
-    borderColor: '#C0C0C0',
-    borderWidth: 1,
-    width: 250,
+  inputContainer: {
+    height: 50,
+    paddingHorizontal: 20,
+    elevation: 40,
+    backgroundColor: COLORS.black,
+    flex: 1,
+    marginVertical: 20,
+    marginRight: 20,
+    borderRadius: 30,
   },
-  addWrapper: {
-    width: 60,
-    height: 60,
-    backgroundColor: '#FFF',
-    borderRadius: 60,
+  iconContainer: {
+    height: 50,
+    width: 50,
+    backgroundColor: COLORS.primary,
+    elevation: 40,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
-    borderColor: '#C0C0C0',
-    borderWidth: 1,
   },
-  addText: {},
+
+  listItem: {
+    padding: 20,
+    backgroundColor: COLORS.green,
+    flexDirection: 'row',
+    elevation: 12,
+    borderRadius: 7,
+    marginVertical: 10,
+  },
+  actionIcon: {
+    height: 25,
+    width: 25,
+    backgroundColor: COLORS.black,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'green',
+    marginLeft: 5,
+    borderRadius: 3,
+  },
+  header: {
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
 });
+
+export default App;
